@@ -85,12 +85,20 @@ F_BADGE   = ("Segoe UI", 8, "bold")
 
 # ── SERIAL CONFIG ───────────────────────────────────────────────
 BAUDRATE = 9600
-DATABITS = 8
-PARITY   = "N"
+DATABITS = 7
+PARITY   = "E"
 STOPBITS = 1
 
 # ── API ─────────────────────────────────────────────────────────
 API_URL = "http://10.11.10.130:8081/api/mesin"
+
+# ── NIK WHITELIST ───────────────────────────────────────────────
+VALID_NIKS = {
+    "24000522", "24000551", "220000247", "17000047", "23000475",
+    "220000265", "120000064", "17000123", "24000539", "20000336",
+    "23000480", "220000264", "17000113", "24000529", "18000252",
+    "220000230", "220000262",
+}
 
 # ── DATA VARIAN + STANDAR ───────────────────────────────────────
 VARIANT_STANDARDS = {
@@ -355,7 +363,7 @@ class ScaleApp:
             # SPACE ke-2 → simpan frozen data
             self._confirm_pending = False
             self._hide_confirm_banner()
-            self._save_data()
+            self._save_data(use_frozen=True)
         else:
             # SPACE ke-1 → snapshot/freeze data berat saat ini
             if not self.current_data:
@@ -489,6 +497,7 @@ class ScaleApp:
                                   highlightthickness=1, width=12)
         self.nik_entry.pack(side="left", fill="y", ipady=6, padx=(0, 6))
         self.nik_entry.bind("<Return>", lambda e: self._confirm_nik())
+        self.nik_entry.bind("<Key>",    lambda e: self._nik_reset_style())
 
         tk.Button(nik_row, text="Masuk", font=F_BTN_SM,
                   bg=RED, fg=WHITE, relief="flat",
@@ -1087,11 +1096,32 @@ class ScaleApp:
         nik = self.nik_entry.get().strip()
         if not nik:
             return
+
+        if nik not in VALID_NIKS:
+            # NIK tidak dikenali — tandai merah, blokir
+            self.nik_entry.config(highlightbackground=RED_ALERT,
+                                  highlightthickness=2)
+            self.nik_ok_lbl.config(
+                text=f"✕  NIK {nik} tidak terdaftar — akses ditolak",
+                fg=RED_ALERT)
+            self.nik_confirmed = False
+            return
+
+        # NIK valid
+        self.nik_entry.config(highlightbackground=GREEN,
+                              highlightthickness=2)
         self.nik_confirmed = True
         self.nik_ok_lbl.config(
             text=f"✓  NIK {nik} — Operator Terverifikasi", fg=GREEN)
         self._set_step(1)
         self.root.focus_set()
+
+    def _nik_reset_style(self):
+        """Reset border entry NIK ke normal saat user mulai mengetik ulang."""
+        self.nik_entry.config(highlightbackground=GRAY_200,
+                              highlightthickness=1)
+        if not self.nik_confirmed:
+            self.nik_ok_lbl.config(text="", fg=GREEN)
 
     # ── VARIANT PICK ────────────────────────────────────────────
     def _pick_variant(self, name):
@@ -1233,7 +1263,7 @@ class ScaleApp:
                                  "NIK, Variant, dan Mesin harus dipilih.")
             return
 
-        w   = self.current_data["weight"]
+        w   = source["weight"]
         std = VARIANT_STANDARDS[self.sel_variant]
         ok  = std["min"] <= w <= std["max"]
         status = "OK" if ok else "NOT OK"
@@ -1243,9 +1273,9 @@ class ScaleApp:
             "nik":     nik,
             "mesin":   self.sel_machine,
             "variant": self.sel_variant,
-            "waktu":   self.current_data["timestamp"],
+            "waktu":   source["timestamp"],
             "berat":   str(w),
-            "unit":    self.current_data["unit"],
+            "unit":    source["unit"],
             "status":  status,
         }
 
@@ -1266,7 +1296,7 @@ class ScaleApp:
                     break
 
         record = {
-            **self.current_data,
+            **source,
             "nik":        nik,
             "machine":    self.sel_machine,
             "variant":    self.sel_variant,
