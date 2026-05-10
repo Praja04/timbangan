@@ -126,7 +126,7 @@ VARIANT_MESIN = {
     "Sachet YB 20gr RENCENG":  {"O", "P", "W", "X"},
     "Sachet BB 40gr PCS":      {"Q", "R"},
     "Sachet BB 40gr RENCENG":  {"Q", "R"},
-    "Pouch YB 77gr":           {"F","G","H","I","D","E","J","K","C","L","AE","AG","B","AF","AI","AJ"},
+    "Pouch YB 77gr":           {"F","G","H","I","D","E","J","K","C","L","AE","AG"},
     "Pouch BB 77gr":           {"C","L","AE","AG","B","AF","AI","AJ"},
     "Pouch YB 250gr":          {"AH"},
     "Pouch BB 270gr":          {"AH"},
