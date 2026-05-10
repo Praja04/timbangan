@@ -325,6 +325,7 @@ class ScaleApp:
         self._reconnecting    = False
         self._confirm_pending = False   # state konfirmasi 2-tahap
         self._frozen_data     = None    # snapshot data berat saat SPACE ke-1
+        self.sel_filler       = tk.IntVar(value=0)  # 0 = belum pilih
 
         self.variant_btns  = {}
         self.mesin_btns    = {}
@@ -356,7 +357,8 @@ class ScaleApp:
         focused = self.root.focus_get()
         if isinstance(focused, tk.Entry):
             return
-        if not (self.nik_confirmed and self.sel_variant and self.sel_machine):
+        if not (self.nik_confirmed and self.sel_variant and self.sel_machine
+                and self.sel_filler.get() != 0):
             return
 
         if self._confirm_pending:
@@ -532,6 +534,37 @@ class ScaleApp:
 
         vf.columnconfigure(0, weight=1)
         vf.columnconfigure(1, weight=1)
+
+        # ── Filler ───────────────────────────────────────────────
+        tk.Frame(inner, bg=GRAY_100, height=1).pack(fill="x", pady=(12, 10))
+
+        tk.Label(inner, text="FILLER", font=F_LABEL,
+                 bg=WHITE, fg=RED).pack(anchor="w", pady=(0, 8))
+
+        filler_row = tk.Frame(inner, bg=WHITE)
+        filler_row.pack(anchor="w", fill="x")
+
+        for val in (2, 6, 8):
+            rb = tk.Radiobutton(
+                filler_row,
+                text=f"  Filler {val}  ",
+                variable=self.sel_filler,
+                value=val,
+                font=F_BODY_B,
+                bg=WHITE,
+                fg=GRAY_800,
+                activebackground=RED_PALE,
+                activeforeground=RED,
+                selectcolor=RED_PALE,
+                indicatoron=0,
+                relief="flat",
+                highlightbackground=GRAY_200,
+                highlightthickness=1,
+                cursor="hand2",
+                padx=14, pady=7,
+                command=self._check_save_ready,
+            )
+            rb.pack(side="left", padx=(0, 6))
 
     # ── COL 2 — Mesin ───────────────────────────────────────────
     def _build_col2(self, parent):
@@ -1198,7 +1231,8 @@ class ScaleApp:
             self._set_step(2)
 
     def _check_save_ready(self):
-        ready = self.sel_variant and self.sel_machine and self.nik_confirmed
+        ready = (self.sel_variant and self.sel_machine
+                 and self.nik_confirmed and self.sel_filler.get() != 0)
         if ready:
             self.save_btn.config(state="normal", bg=RED, fg=WHITE,
                                  cursor="hand2")
@@ -1277,6 +1311,7 @@ class ScaleApp:
             "berat":   str(w),
             "unit":    source["unit"],
             "status":  status,
+            "filler":  str(self.sel_filler.get()),
         }
 
         def _post():
