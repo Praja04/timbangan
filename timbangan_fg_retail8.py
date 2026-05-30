@@ -1459,11 +1459,14 @@ class ScaleApp:
         Simpan data timbangan ke API secara SINKRON dengan retry.
 
         Alur:
-          1. Validasi input
-          2. Tampilkan loading overlay (UI tidak bisa diklik)
-          3. POST ke API — retry maks 3x jika gagal/timeout
-          4a. Berhasil → tambah ke tabel, bersihkan frozen, lanjut
-          4b. Gagal semua retry → sembunyikan overlay, tampilkan ERROR,
+          1. Validasi input & cek abnormal (rev_lo/rev_hi) → tolak
+          2. Jika berat NOT OK (di luar min–max standar):
+             → tampil dialog konfirmasi, operator pilih Kirim / Batal
+             → jika Batal, data tidak dikirim sama sekali
+          3. Tampilkan loading overlay (UI tidak bisa diklik)
+          4. POST ke API — retry maks 3x jika gagal/timeout
+          5a. Berhasil → tambah ke tabel, bersihkan frozen, lanjut
+          5b. Gagal semua retry → sembunyikan overlay, tampilkan ERROR,
               data TIDAK disimpan ke tabel (operator harus coba ulang)
         """
         source = source_override if source_override is not None else self.current_data
@@ -1484,6 +1487,37 @@ class ScaleApp:
         std    = VARIANT_STANDARDS[self.sel_variant]
         ok     = std["min"] <= w <= std["max"]
         status = "OK" if ok else "NOT OK"
+
+        # ── Konfirmasi tambahan jika NOT OK ──────────────────────
+        if not ok:
+            if w < std["min"]:
+                selisih = std["min"] - w
+                keterangan = (
+                    f"Berat terbaca  : {w:.2f} g\n"
+                    f"Min standar    : {std['min']:.2f} g\n"
+                    f"Selisih kurang : {selisih:.2f} g\n\n"
+                    f"Berat DI BAWAH batas minimum standar."
+                )
+            else:
+                selisih = w - std["max"]
+                keterangan = (
+                    f"Berat terbaca  : {w:.2f} g\n"
+                    f"Max standar    : {std['max']:.2f} g\n"
+                    f"Selisih lebih  : {selisih:.2f} g\n\n"
+                    f"Berat MELEBIHI batas maksimum standar."
+                )
+            lanjut = messagebox.askyesno(
+                "⚠ Berat NOT OK — Konfirmasi Pengiriman",
+                f"Data ini berstatus NOT OK!\n\n"
+                f"{keterangan}\n"
+                f"Tetap kirim data NOT OK ini ke database?\n\n"
+                f"  ▸ Klik YA   → data dikirim dengan status NOT OK\n"
+                f"  ▸ Klik TIDAK → batal, data tidak dikirim",
+                icon="warning")
+            if not lanjut:
+                return   # operator pilih batal
+        # ─────────────────────────────────────────────────────────
+
         nik    = self.nik_entry.get().strip()
         filler = self.sel_filler_val
 
