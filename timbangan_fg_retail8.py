@@ -1393,7 +1393,7 @@ class ScaleApp:
         source = source_override if source_override is not None else self.current_data
         if not source:
             messagebox.showwarning("Tidak Ada Data",
-                                   "Timbangan belum terbaca. Pastikan kabel terhubung.")
+                                "Timbangan belum terbaca. Pastikan kabel terhubung.")
             return
         if not (self.sel_variant and self.sel_machine and self.nik_confirmed):
             messagebox.showerror("Lengkapi Data", "NIK, Variant, dan Mesin harus dipilih.")
@@ -1440,9 +1440,9 @@ class ScaleApp:
         nik    = self.nik_entry.get().strip()
         filler = self.sel_filler_val
         form   = {"nik": nik, "mesin": self.sel_machine,
-                  "variant": self.sel_variant, "waktu": source["timestamp"],
-                  "berat": str(w), "unit": source["unit"],
-                  "status": status, "filler": filler}
+                "variant": self.sel_variant, "waktu": source["timestamp"],
+                "berat": str(w), "unit": source["unit"],
+                "status": status, "filler": filler}
 
         MAX_RETRY   = 3
         RETRY_DELAY = 2.0
@@ -1456,7 +1456,7 @@ class ScaleApp:
                     if resp.status_code in (200, 201):
                         result["ok"]         = True
                         result["api_status"] = "✓ Terkirim"
-                        return
+                        break
                     else:
                         result["api_status"] = f"Error {resp.status_code}"
                         result["error"]      = f"Server mengembalikan HTTP {resp.status_code}"
@@ -1474,10 +1474,15 @@ class ScaleApp:
                                     f"Gagal, mencoba ulang {attempt + 1}/{MAX_RETRY}...")
                     time.sleep(RETRY_DELAY)
 
+            # Selesai — kembalikan ke main thread
+            self.root.after(0, self._on_post_done, result, source, form)
+
         self._show_loading("Menghubungi server...")
-        t = threading.Thread(target=_post_with_retry, daemon=True)
-        t.start()
-        t.join()
+        threading.Thread(target=_post_with_retry, daemon=True).start()
+        # ← fungsi selesai di sini, TIDAK ada kode lagi setelah ini
+
+    def _on_post_done(self, result, source, form):
+        """Dipanggil dari main thread setelah POST selesai."""
         self._hide_loading()
 
         if not result["ok"]:
@@ -1486,13 +1491,17 @@ class ScaleApp:
                 f"Data TIDAK tersimpan ke database!\n\n"
                 f"Status  : {result['api_status']}\n"
                 f"Detail  : {result['error']}\n\n"
-                f"Sudah dicoba {MAX_RETRY}x.\n"
+                f"Sudah dicoba 3x.\n"
                 f"Periksa koneksi jaringan lalu tekan SPACE lagi untuk mencoba ulang.")
             return
 
+        nik    = form["nik"]
+        filler = form["filler"]
+        status = form["status"]
+
         record = {**source, "nik": nik, "machine": self.sel_machine,
-                  "variant": self.sel_variant, "status": status,
-                  "filler": filler, "api_status": result["api_status"]}
+                "variant": self.sel_variant, "status": status,
+                "filler": filler, "api_status": result["api_status"]}
         self.saved_data.append(record)
         self._frozen_data = None
         self._insert_row_top(record)
