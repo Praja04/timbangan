@@ -3,17 +3,18 @@ Timbangan AND GX-4000 — Quality Control Data Logger
 UI: Merah Terang & Putih, 3-column layout
 Flow: NIK → Variant → Mesin → Filler → Simpan
 
-Revisi v10:
-  - FIX KRITIS: data WAJIB terkirim ke API sebelum dianggap tersimpan
-    → _save_data() sekarang sinkron: UI diblokir (loading overlay) sampai
-      POST selesai (berhasil atau gagal setelah retry)
-    → Retry otomatis 3x dengan jeda 2 detik jika koneksi gagal/timeout
-    → Jika 3x retry tetap gagal, muncul dialog ERROR dan data TIDAK
-      ditambahkan ke tabel — operator tahu data belum masuk ke database
-    → Tidak ada lagi status "Pending" / "Offline" yang diam-diam hilang
+Revisi v11:
+  - FIX PORT: hanya konek ke USB-SERIAL CH340
+    → _is_ch340_port() filter keras: port lain (Prolific, Bluetooth,
+      virtual, COM sistem) langsung dilewati tanpa dicoba sama sekali
+    → Jika CH340 tidak terpasang → status "USB-SERIAL CH340 tidak ditemukan"
+      dan retry otomatis tiap 5 detik
+  - Revisi v10 (tetap):
+    → data WAJIB terkirim ke API sebelum dianggap tersimpan
+    → loading overlay blokir UI sampai POST selesai / gagal
+    → retry otomatis 3x dengan jeda 2 detik
   - Revisi v9 (tetap):
     → frozen data tidak hilang saat banner disembunyikan
-    → deteksi COM port prioritaskan Prolific/USB-Serial
 
 Requirements:
     pip install pyserial openpyxl requests
@@ -99,14 +100,6 @@ VALID_NIKS = {
 }
 
 # ── DATA VARIAN + STANDAR ───────────────────────────────────────
-# Kolom  : rev_lo = batas bawah penerimaan sistem (rev)
-#           tu2   = TU2
-#           tu1   = TU1
-#           min   = Min Standar
-#           std   = Standard
-#           max   = Max Standar
-#           rev_hi= batas atas penerimaan sistem (rev)
-# Sumber  : tabel standar produksi (diperbarui v10)
 VARIANT_STANDARDS = {
     "Sachet YB 12,5gr PCS":    {"rev_lo":   8.55, "tu2":  10.80, "tu1":  11.93, "min":  12.05, "std":  13.05, "max":  14.05, "rev_hi":  15.05, "code": "S12.5G-P"},
     "Sachet YB 12,5gr RENCENG":{"rev_lo": 102.60, "tu2": 129.60, "tu1": 143.10, "min": 154.60, "std": 156.60, "max": 168.60, "rev_hi": 180.60, "code": "S12.5G-R"},
@@ -173,10 +166,6 @@ ALL_FILLER_VALUES = [str(i) for i in range(1, 9)]   # 1–8
 
 
 def _is_abnormal(weight, std_data):
-    """
-    Berat di luar batas penerimaan sistem (rev_lo .. rev_hi) dianggap abnormal.
-    Fallback ke std/2 .. std*1.5 jika kolom rev belum ada (kompatibilitas).
-    """
     if std_data is None:
         return False
     lo = std_data.get("rev_lo", std_data["std"] / 2.0)
@@ -184,22 +173,18 @@ def _is_abnormal(weight, std_data):
     return weight < lo or weight > hi
 
 
-def _port_priority(port_info):
+# ── v11: FILTER KERAS — hanya USB-SERIAL CH340 ──────────────────
+def _is_ch340_port(port_info):
     """
-    Kembalikan nilai prioritas port (semakin kecil = semakin prioritas).
-    Prolific / USB-Serial / CH340 / FTDI → prioritas 0 (dicoba duluan).
-    Port lain (COM1, COM3, virtual) → prioritas 1 (dicoba belakangan).
+    Kembalikan True HANYA jika port ini adalah USB-SERIAL CH340.
+    Semua port lain (Prolific, Bluetooth, virtual, COM sistem)
+    langsung dilewati tanpa dicoba sama sekali.
     """
-    keywords = ("prolific", "usb", "ch340", "ftdi", "silicon lab",
-                 "cp210", "arduino", "serial")
-    desc = (port_info.description or "").lower()
-    mfr  = (port_info.manufacturer or "").lower()
-    hwid = (port_info.hwid or "").lower()
+    desc  = (port_info.description  or "").lower()
+    mfr   = (port_info.manufacturer or "").lower()
+    hwid  = (port_info.hwid         or "").lower()
     combined = desc + " " + mfr + " " + hwid
-    for kw in keywords:
-        if kw in combined:
-            return 0
-    return 1
+    return "ch340" in combined
 
 
 # ════════════════════════════════════════════════════════════════
@@ -457,7 +442,7 @@ class ScaleApp:
         self.root.bind("<Escape>", self._space_cancel)
 
     # ─────────────────────────────────────────────────────────────
-    # SPACE / SAVE LOGIC  ← PERBAIKAN UTAMA v9
+    # SPACE / SAVE LOGIC
     # ─────────────────────────────────────────────────────────────
     def _space_save(self, event=None):
         if isinstance(self.root.focus_get(), tk.Entry):
@@ -466,10 +451,9 @@ class ScaleApp:
             return
 
         if self._confirm_pending:
-            # ── Konfirmasi kedua: gunakan frozen_data yang sudah di-capture ──
             frozen = self._frozen_data
             if frozen is None:
-                return  # safety guard
+                return
             if _is_abnormal(frozen["weight"], VARIANT_STANDARDS.get(self.sel_variant)):
                 self._alert_abnormal(frozen["weight"], VARIANT_STANDARDS[self.sel_variant])
                 self._confirm_pending = False
@@ -477,11 +461,8 @@ class ScaleApp:
                 return
             self._confirm_pending = False
             self._hide_confirm_banner()
-            # v10: frozen TIDAK di-None di sini; _save_data() yang set None
-            # setelah POST berhasil — jika gagal, frozen masih tersedia
             self._save_data(source_override=frozen)
         else:
-            # ── Penekanan pertama: freeze berat saat ini ──
             if not self.current_data:
                 messagebox.showwarning("Tidak Ada Data",
                     "Timbangan belum terbaca. Pastikan kabel terhubung.")
@@ -543,7 +524,7 @@ class ScaleApp:
         badge.grid(row=0, column=2, sticky="e", padx=(0, 8), pady=15)
         self.conn_dot = tk.Label(badge, text="●", font=("Segoe UI", 10), bg=RED, fg=GRAY_400)
         self.conn_dot.pack(side="left", padx=(10, 4))
-        self.conn_lbl = tk.Label(badge, text="Mendeteksi port...", font=F_SMALL, bg=RED, fg=WHITE)
+        self.conn_lbl = tk.Label(badge, text="Mendeteksi CH340...", font=F_SMALL, bg=RED, fg=WHITE)
         self.conn_lbl.pack(side="left", padx=(0, 6))
 
         tk.Button(hdr, text="↺ Reconnect",
@@ -965,7 +946,7 @@ class ScaleApp:
                       highlightbackground=GRAY_100, highlightthickness=1)
         ft.grid(row=3, column=0, sticky="ew")
         self.footer_lbl = tk.Label(
-            ft, text=f"Port: Mendeteksi... · API: {API_URL}",
+            ft, text=f"Port: Mendeteksi CH340... · API: {API_URL}",
             font=F_SMALL, bg=GRAY_50, fg=GRAY_400)
         self.footer_lbl.pack(side="left", padx=16, pady=6)
         tk.Button(ft, text="↓ Export Excel",
@@ -977,34 +958,37 @@ class ScaleApp:
                  font=F_SMALL, bg=GRAY_50, fg=GRAY_200).pack(side="right", padx=0, pady=6)
 
     # ─────────────────────────────────────────────────────────────
-    # SERIAL  ← PERBAIKAN v9: prioritaskan port Prolific/USB
+    # SERIAL  ← v11: HANYA CH340
     # ─────────────────────────────────────────────────────────────
     def _auto_detect_port(self):
         def _detect():
-            ports = serial.tools.list_ports.comports()
-            if not ports:
-                self.root.after(0, self._set_conn_status, False, "Tidak ada port ditemukan")
-                self.root.after(3000, self._auto_detect_port)
+            all_ports = serial.tools.list_ports.comports()
+
+            # ── v11: filter keras — hanya CH340 ──────────────────
+            ch340_ports = [p for p in all_ports if _is_ch340_port(p)]
+
+            print(f"[PORT SCAN] {len(all_ports)} port total — "
+                  f"{len(ch340_ports)} CH340 ditemukan:")
+            for p in all_ports:
+                tag = "✓ CH340" if _is_ch340_port(p) else "✗ skip"
+                print(f"  [{tag}]  {p.device:10s}  desc={p.description!r}")
+
+            if not ch340_ports:
+                self.root.after(0, self._set_conn_status, False,
+                                "USB-SERIAL CH340 tidak ditemukan")
+                self.root.after(5000, self._auto_detect_port)
                 return
-
-            sorted_ports = sorted(ports, key=_port_priority)
-
-            print("[PORT SCAN] Daftar port (urutan prioritas):")
-            for p in sorted_ports:
-                prio = _port_priority(p)
-                label = "★ PRIORITAS" if prio == 0 else "  biasa"
-                print(f"  {label}  {p.device:10s}  desc={p.description!r:40s}  "
-                    f"mfr={p.manufacturer!r}  hwid={p.hwid!r}")
 
             cfgs = [
                 {"bytesize": DATABITS, "parity": serial.PARITY_EVEN, "label": "7E1"},
                 {"bytesize": 8,        "parity": serial.PARITY_NONE, "label": "8N1"},
             ]
-            for p in sorted_ports:
+
+            for p in ch340_ports:
                 for cfg in cfgs:
                     conn = self._try_open_serial(p.device, cfg)
                     if conn:
-                        # ── Probe: tunggu 2 detik, cek apakah ada data timbangan valid ──
+                        # Probe: tunggu 2 detik, cek data timbangan valid
                         print(f"[PROBE] {p.device} ({cfg['label']}) — menunggu data...")
                         deadline = time.time() + 2.0
                         valid = False
@@ -1012,7 +996,8 @@ class ScaleApp:
                             try:
                                 if conn.in_waiting > 0:
                                     raw = conn.readline().decode("ascii", errors="ignore").strip()
-                                    if raw and re.match(r"^[A-Z]{2},[+\-]?\d+\.?\d*\s*[a-zA-Z]+$", raw):
+                                    if raw and re.match(
+                                            r"^[A-Z]{2},[+\-]?\d+\.?\d*\s*[a-zA-Z]+$", raw):
                                         print(f"[PROBE] ✓ Data valid: {raw!r}")
                                         valid = True
                                         break
@@ -1028,20 +1013,22 @@ class ScaleApp:
                                 pass
                             continue
 
-                        self.serial_conn = conn
-                        self.auto_port   = p.device
-                        self.is_reading  = True
+                        self.serial_conn    = conn
+                        self.auto_port      = p.device
+                        self.is_reading     = True
                         self._active_config = cfg["label"]
-                        prio_tag = " [USB]" if _port_priority(p) == 0 else ""
                         self.root.after(0, self._set_conn_status, True,
-                                        f"{p.device}{prio_tag} [{cfg['label']}]")
-                        self.thread = threading.Thread(target=self._read_thread, daemon=True)
+                                        f"{p.device} [CH340] [{cfg['label']}]")
+                        self.thread = threading.Thread(
+                            target=self._read_thread, daemon=True)
                         self.thread.start()
                         return
 
+            # CH340 ditemukan tapi gagal konek / tidak ada data valid
             self.root.after(0, self._set_conn_status, False,
-                            f"{len(ports)} port ditemukan, gagal konek")
+                            f"CH340 ditemukan ({len(ch340_ports)}x) — gagal konek")
             self.root.after(5000, self._auto_detect_port)
+
         threading.Thread(target=_detect, daemon=True).start()
 
     def _try_open_serial(self, port, cfg, retries=3, delay=1.0):
@@ -1059,8 +1046,8 @@ class ScaleApp:
         for attempt in range(retries):
             try:
                 conn = serial.Serial(port=port, baudrate=BAUDRATE,
-                                    bytesize=cfg["bytesize"], parity=cfg["parity"],
-                                    stopbits=STOPBITS, timeout=1)
+                                     bytesize=cfg["bytesize"], parity=cfg["parity"],
+                                     stopbits=STOPBITS, timeout=1)
                 conn.reset_input_buffer()
                 return conn
             except NO_RETRY_ERRORS as e:
@@ -1080,14 +1067,13 @@ class ScaleApp:
                     errno_val = errno_val or cause.errno or cause.winerror
                 if errno_val in NO_RETRY_ERRNO:
                     print(f"[SERIAL] {port} ({cfg['label']}) skip "
-                        f"(errno/winerror {errno_val}) — {e}")
+                          f"(errno/winerror {errno_val}) — {e}")
                     return None
                 print(f"[SERIAL] {port} ({cfg['label']}) "
-                    f"attempt {attempt+1}/{retries}: {e}")
+                      f"attempt {attempt+1}/{retries}: {e}")
                 if attempt < retries - 1:
                     time.sleep(delay)
         return None
-
 
     def _manual_reconnect(self):
         if self._reconnecting: return
@@ -1108,12 +1094,11 @@ class ScaleApp:
                 except Exception as e:
                     print(f"[SERIAL] close: {e}")
             self.serial_conn = None
-            time.sleep(0.8)  # cukup 0.8s, dummy open/close yang handle sisanya
+            time.sleep(0.8)
             self._reconnecting = False
             self.root.after(0, self._auto_detect_port)
 
         threading.Thread(target=_do, daemon=True).start()
-
 
     def _set_conn_status(self, connected, detail):
         if connected:
@@ -1160,8 +1145,6 @@ class ScaleApp:
         self.live_weight = data["weight"]
         self.live_unit   = data["unit"]
         if self._confirm_pending:
-            # ── Saat pending: update current_data di background
-            # tapi JANGAN ubah tampilan / frozen ──
             self.current_data = data
             return
         self.current_data = data
@@ -1383,8 +1366,6 @@ class ScaleApp:
         self.space_hint.grid(row=2, column=0, sticky="e", pady=(2, 0))
 
     def _hide_confirm_banner(self):
-        # ── v9: TIDAK reset _frozen_data di sini ──
-        # Caller yang bertanggung jawab meneruskan atau membatalkan frozen
         self.confirm_banner.grid_forget()
         self.save_btn.grid(row=0, column=0, sticky="ew")
         self.space_hint.grid(row=1, column=0, sticky="e", pady=(2, 0))
@@ -1397,12 +1378,6 @@ class ScaleApp:
             self.weight_lbl.config(fg=RED)
 
     def _confirm_and_save(self):
-        """
-        Tombol 'Konfirmasi' diklik.
-        v10: frozen TIDAK dihapus dulu — _save_data yang menghapusnya
-             hanya jika POST berhasil. Jika gagal, operator bisa SPACE
-             lagi tanpa harus ulang dari awal.
-        """
         frozen = self._frozen_data
         if frozen is None:
             return
@@ -1414,15 +1389,9 @@ class ScaleApp:
             return
         self._confirm_pending = False
         self._hide_confirm_banner()
-        # frozen sengaja TIDAK di-None di sini;
-        # _save_data() akan set None sendiri setelah POST sukses
         self._save_data(source_override=frozen)
 
-    # ─────────────────────────────────────────────────────────────
-    # LOADING OVERLAY  (blokir UI saat mengirim ke API)
-    # ─────────────────────────────────────────────────────────────
     def _show_loading(self, msg="Mengirim data ke server..."):
-        """Tampilkan overlay transparan di atas seluruh window."""
         self._loading = tk.Toplevel(self.root)
         self._loading.overrideredirect(True)
         self._loading.attributes("-alpha", 0.82)
@@ -1451,24 +1420,7 @@ class ScaleApp:
         if hasattr(self, "_loading") and self._loading.winfo_exists():
             self._loading.destroy()
 
-    # ─────────────────────────────────────────────────────────────
-    # SAVE DATA  ← v10: SINKRON — data harus terkirim dulu
-    # ─────────────────────────────────────────────────────────────
     def _save_data(self, source_override=None):
-        """
-        Simpan data timbangan ke API secara SINKRON dengan retry.
-
-        Alur:
-          1. Validasi input & cek abnormal (rev_lo/rev_hi) → tolak
-          2. Jika berat NOT OK (di luar min–max standar):
-             → tampil dialog konfirmasi, operator pilih Kirim / Batal
-             → jika Batal, data tidak dikirim sama sekali
-          3. Tampilkan loading overlay (UI tidak bisa diklik)
-          4. POST ke API — retry maks 3x jika gagal/timeout
-          5a. Berhasil → tambah ke tabel, bersihkan frozen, lanjut
-          5b. Gagal semua retry → sembunyikan overlay, tampilkan ERROR,
-              data TIDAK disimpan ke tabel (operator harus coba ulang)
-        """
         source = source_override if source_override is not None else self.current_data
         if not source:
             messagebox.showwarning("Tidak Ada Data",
@@ -1488,7 +1440,6 @@ class ScaleApp:
         ok     = std["min"] <= w <= std["max"]
         status = "OK" if ok else "NOT OK"
 
-        # ── Konfirmasi tambahan jika NOT OK ──────────────────────
         if not ok:
             if w < std["min"]:
                 selisih = std["min"] - w
@@ -1515,25 +1466,22 @@ class ScaleApp:
                 f"  ▸ Klik TIDAK → batal, data tidak dikirim",
                 icon="warning")
             if not lanjut:
-                return   # operator pilih batal
-        # ─────────────────────────────────────────────────────────
+                return
 
         nik    = self.nik_entry.get().strip()
         filler = self.sel_filler_val
+        form   = {"nik": nik, "mesin": self.sel_machine,
+                  "variant": self.sel_variant, "waktu": source["timestamp"],
+                  "berat": str(w), "unit": source["unit"],
+                  "status": status, "filler": filler}
 
-        form = {"nik": nik, "mesin": self.sel_machine,
-                "variant": self.sel_variant, "waktu": source["timestamp"],
-                "berat": str(w), "unit": source["unit"],
-                "status": status, "filler": filler}
-
-        MAX_RETRY = 3
-        RETRY_DELAY = 2.0   # detik antar retry
+        MAX_RETRY   = 3
+        RETRY_DELAY = 2.0
         result = {"ok": False, "api_status": "Gagal", "error": ""}
 
         def _post_with_retry():
             for attempt in range(1, MAX_RETRY + 1):
-                label = f"Percobaan {attempt}/{MAX_RETRY}..."
-                self.root.after(0, self._update_loading, label)
+                self.root.after(0, self._update_loading, f"Percobaan {attempt}/{MAX_RETRY}...")
                 try:
                     resp = requests.post(API_URL, data=form, timeout=8)
                     if resp.status_code in (200, 201):
@@ -1552,20 +1500,17 @@ class ScaleApp:
                 except Exception as e:
                     result["api_status"] = "Gagal"
                     result["error"]      = str(e)
-
                 if attempt < MAX_RETRY:
                     self.root.after(0, self._update_loading,
                                     f"Gagal, mencoba ulang {attempt + 1}/{MAX_RETRY}...")
                     time.sleep(RETRY_DELAY)
 
-        # ── Tampilkan overlay & jalankan retry di thread ──
         self._show_loading("Menghubungi server...")
         t = threading.Thread(target=_post_with_retry, daemon=True)
         t.start()
-        t.join()          # tunggu selesai — UI ter-blokir overlay selama ini
+        t.join()
         self._hide_loading()
 
-        # ── Evaluasi hasil ──
         if not result["ok"]:
             messagebox.showerror(
                 "❌ Gagal Mengirim Data",
@@ -1574,9 +1519,8 @@ class ScaleApp:
                 f"Detail  : {result['error']}\n\n"
                 f"Sudah dicoba {MAX_RETRY}x.\n"
                 f"Periksa koneksi jaringan lalu tekan SPACE lagi untuk mencoba ulang.")
-            return  # ← batal, data tidak masuk tabel
+            return
 
-        # ── POST berhasil → simpan ke tabel lokal ──
         record = {**source, "nik": nik, "machine": self.sel_machine,
                   "variant": self.sel_variant, "status": status,
                   "filler": filler, "api_status": result["api_status"]}
@@ -1590,9 +1534,6 @@ class ScaleApp:
             if self.live_weight and self.sel_variant
             else self.weight_lbl.config(fg=RED)))
 
-    # ─────────────────────────────────────────────────────────────
-    # EXPORT EXCEL
-    # ─────────────────────────────────────────────────────────────
     def _export_excel(self):
         if not self.saved_data:
             messagebox.showinfo("Kosong", "Belum ada data untuk di-export.")
@@ -1604,7 +1545,6 @@ class ScaleApp:
         try:
             wb = Workbook(); ws = wb.active; ws.title = "Data Timbangan"
             thin = Side(style="thin"); border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
             ws.merge_cells("A1:K1")
             c = ws["A1"]
             c.value = "DATA TIMBANGAN — AND GX-4000 | Quality Control"
@@ -1612,7 +1552,6 @@ class ScaleApp:
             c.fill  = PatternFill("solid", fgColor="FFF5F5")
             c.alignment = Alignment(horizontal="center", vertical="center")
             ws.row_dimensions[1].height = 28
-
             headers = ["No","NIK","Mesin","Variant","Filler","Tanggal","Waktu","Berat","Unit","Status","API"]
             hfill = PatternFill("solid", fgColor="E53E3E")
             for ci, h in enumerate(headers, 1):
@@ -1622,13 +1561,11 @@ class ScaleApp:
                 cell.alignment = Alignment(horizontal="center")
                 cell.border    = border
             ws.row_dimensions[2].height = 20
-
             fill_a   = PatternFill("solid", fgColor="FFFFFF")
             fill_b   = PatternFill("solid", fgColor="FFF5F5")
             fill_ok  = PatternFill("solid", fgColor="DCFCE7")
             fill_nok = PatternFill("solid", fgColor="FEE2E2")
             count_ok = count_nok = 0
-
             for i, d in enumerate(self.saved_data, 1):
                 row = i + 2; fill = fill_a if i % 2 else fill_b
                 dt = datetime.strptime(d["timestamp"], "%Y-%m-%d %H:%M:%S")
@@ -1646,10 +1583,9 @@ class ScaleApp:
                                       fill_nok if (ci == 10 and not is_ok) else fill)
                     cell.border    = border
                     cell.alignment = Alignment(horizontal="center")
-
+            from openpyxl.utils import get_column_letter
             for ci, w in enumerate([6,12,10,24,8,14,10,10,8,10,12], 1):
-                ws.column_dimensions[ws.cell(1,ci).column_letter].width = w
-
+                ws.column_dimensions[get_column_letter(ci)].width = w
             sr = len(self.saved_data) + 4
             ws.cell(sr,   1).value = "RINGKASAN"
             ws.cell(sr,   1).font  = Font(bold=True, color="E53E3E")
@@ -1665,9 +1601,6 @@ class ScaleApp:
         except Exception as e:
             messagebox.showerror("Export Gagal", str(e))
 
-    # ─────────────────────────────────────────────────────────────
-    # CLOSE
-    # ─────────────────────────────────────────────────────────────
     def _on_close(self):
         if not messagebox.askokcancel(
             "Tutup Aplikasi",
@@ -1688,7 +1621,6 @@ class ScaleApp:
         self.root.destroy()
 
 
-# ════════════════════════════════════════════════════════════════
 def main():
     root = tk.Tk()
     root.geometry("1280x800")
