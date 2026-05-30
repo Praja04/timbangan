@@ -1032,47 +1032,16 @@ class ScaleApp:
         threading.Thread(target=_detect, daemon=True).start()
 
     def _try_open_serial(self, port, cfg, retries=3, delay=1.0):
-        NO_RETRY_ERRORS = (FileNotFoundError,)
-        NO_RETRY_ERRNO  = {13, 22, 31, 121}
-
-        # Dummy open/close — paksa Windows lepas handle lama
-        try:
-            _t = serial.Serial(port=port)
-            _t.close()
-        except Exception:
-            pass
-        time.sleep(0.2)
-
         for attempt in range(retries):
             try:
                 conn = serial.Serial(port=port, baudrate=BAUDRATE,
-                                     bytesize=cfg["bytesize"], parity=cfg["parity"],
-                                     stopbits=STOPBITS, timeout=1)
+                                    bytesize=cfg["bytesize"], parity=cfg["parity"],
+                                    stopbits=STOPBITS, timeout=1)
                 conn.reset_input_buffer()
                 return conn
-            except NO_RETRY_ERRORS as e:
-                print(f"[SERIAL] {port} ({cfg['label']}) skip — {e}")
-                return None
             except serial.SerialException as e:
-                errno_val = None
-                for arg in e.args:
-                    if isinstance(arg, OSError):
-                        errno_val = arg.errno or arg.winerror
-                        break
-                    if isinstance(arg, int):
-                        errno_val = arg
-                        break
-                cause = e.__cause__ or e.__context__
-                if cause and isinstance(cause, OSError):
-                    errno_val = errno_val or cause.errno or cause.winerror
-                if errno_val in NO_RETRY_ERRNO:
-                    print(f"[SERIAL] {port} ({cfg['label']}) skip "
-                          f"(errno/winerror {errno_val}) — {e}")
-                    return None
-                print(f"[SERIAL] {port} ({cfg['label']}) "
-                      f"attempt {attempt+1}/{retries}: {e}")
-                if attempt < retries - 1:
-                    time.sleep(delay)
+                print(f"[SERIAL] {port} ({cfg['label']}) attempt {attempt+1}/{retries}: {e}")
+                if attempt < retries - 1: time.sleep(delay)
         return None
 
     def _manual_reconnect(self):
