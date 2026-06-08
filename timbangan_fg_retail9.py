@@ -3,7 +3,7 @@ Timbangan AND GX-4000 — Quality Control Data Logger
 UI: Merah Terang & Putih, 3-column layout
 Flow: NIK → Variant → Mesin → Filler → Simpan
 
-Revisi v11:
+Revisi v9:
   - FIX PORT: hanya konek ke USB-SERIAL CH340
     → _is_ch340_port() filter keras: port lain (Prolific, Bluetooth,
       virtual, COM sistem) langsung dilewati tanpa dicoba sama sekali
@@ -445,7 +445,8 @@ class ScaleApp:
     # SPACE / SAVE LOGIC
     # ─────────────────────────────────────────────────────────────
     def _space_save(self, event=None):
-        if isinstance(self.root.focus_get(), tk.Entry):
+        focused = self.root.focus_get()
+        if isinstance(focused, (tk.Entry, tk.Button)):
             return
         if not self._is_ready():
             return
@@ -1114,7 +1115,6 @@ class ScaleApp:
         self.live_weight = data["weight"]
         self.live_unit   = data["unit"]
         if self._confirm_pending:
-            self.current_data = data
             return
         self.current_data = data
         self.weight_lbl.config(text=f"{data['weight']:.2f}")
