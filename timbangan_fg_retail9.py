@@ -101,26 +101,24 @@ VALID_NIKS = {
 
 # ── DATA VARIAN + STANDAR ───────────────────────────────────────
 VARIANT_STANDARDS = {
-    "Sachet YB 12,5gr PCS":    {"rev_lo":   8.55, "tu2":  10.80, "tu1":  11.93, "min":  12.05, "std":  13.05, "max":  14.05, "rev_hi":  15.05, "code": "S12.5G-P"},
-    "Sachet YB 12,5gr RENCENG":{"rev_lo": 102.60, "tu2": 129.60, "tu1": 143.10, "min": 154.60, "std": 156.60, "max": 168.60, "rev_hi": 180.60, "code": "S12.5G-R"},
-    "Sachet YB 20gr PCS":      {"rev_lo":  13.44, "tu2":  17.04, "tu1":  18.84, "min":  19.14, "std":  20.64, "max":  21.64, "rev_hi":  22.64, "code": "S20G-P"},
-    "Sachet YB 20gr RENCENG":  {"rev_lo": 161.28, "tu2": 204.48, "tu1": 226.08, "min": 244.68, "std": 247.68, "max": 259.68, "rev_hi": 271.68, "code": "S20G-R"},
-    "Sachet BB 40gr PCS":      {"rev_lo":  26.70, "tu2":  33.90, "tu1":  37.50, "min":  39.10, "std":  41.10, "max":  42.10, "rev_hi":  43.10, "code": "S40G-P"},
-    "Sachet BB 40gr RENCENG":  {"rev_lo": 320.40, "tu2": 406.80, "tu1": 450.00, "min": 489.20, "std": 493.20, "max": 505.20, "rev_hi": 517.20, "code": "S40G-R"},
-    "Pouch YB 77gr":           {"rev_lo":  61.20, "tu2":  70.20, "tu1":  74.70, "min":  78.70, "std":  79.20, "max":  82.70, "rev_hi":  86.20, "code": "P77G-YB"},
-    "Pouch BB 77gr":           {"rev_lo":  61.20, "tu2":  70.20, "tu1":  74.70, "min":  78.70, "std":  79.20, "max":  82.70, "rev_hi":  86.20, "code": "P77G-BB"},
-    "Pouch YB 250gr":          {"rev_lo": 219.00, "tu2": 237.00, "tu1": 246.00, "min": 254.00, "std": 255.00, "max": 257.00, "rev_hi": 259.00, "code": "P250G"},
-    "Pouch BB 270gr":          {"rev_lo": 239.00, "tu2": 257.00, "tu1": 266.00, "min": 274.00, "std": 275.00, "max": 277.00, "rev_hi": 279.00, "code": "P270G"},
-    "Pouch YB 550gr":          {"rev_lo": 500.60, "tu2": 530.80, "tu1": 545.80, "min": 558.00, "std": 561.00, "max": 566.00, "rev_hi": 571.00, "code": "P550G"},
-    "Pouch YB 700gr":          {"rev_lo": 651.00, "tu2": 681.00, "tu1": 696.00, "min": 708.00, "std": 711.00, "max": 716.00, "rev_hi": 721.00, "code": "P700G"},
-    "Pouch BB 725gr":          {"rev_lo": 675.00, "tu2": 705.00, "tu1": 720.00, "min": 732.00, "std": 735.00, "max": 740.00, "rev_hi": 745.00, "code": "P725G"},
-    "Pouch YB 1000gr":         {"rev_lo": 952.50, "tu2": 982.50, "tu1": 997.50, "min":1009.50, "std":1012.50, "max":1017.50, "rev_hi":1022.50, "code": "P1000G"},
+    "Sachet YB 20gr PCS":      {"rev_lo":  13.44, "tu2":  17.04, "tu1":  18.84, "min":  19.14, "std":  20.64, "max":  21.64, "rev_hi":  24.64, "code": "S20G-P"},
+    "Sachet YB 20gr RENCENG":  {"rev_lo": 161.28, "tu2": 204.48, "tu1": 226.08, "min": 244.68, "std": 247.68, "max": 259.68, "rev_hi": 295.68, "code": "S20G-R"},
+    "Sachet BB 40gr PCS":      {"rev_lo":  26.70, "tu2":  33.90, "tu1":  37.50, "min":  39.10, "std":  41.10, "max":  42.10, "rev_hi":  45.10, "code": "S40G-P"},
+    "Sachet BB 40gr RENCENG":  {"rev_lo": 320.40, "tu2": 406.80, "tu1": 450.00, "min": 489.20, "std": 493.20, "max": 505.20, "rev_hi": 541.20, "code": "S40G-R"},
+    "Pouch YB 77gr":           {"rev_lo":  61.20, "tu2":  70.20, "tu1":  74.70, "min":  78.70, "std":  79.20, "max":  82.70, "rev_hi":  93.20, "code": "P77G-YB"},
+    "Pouch BB 77gr":           {"rev_lo":  61.20, "tu2":  70.20, "tu1":  74.70, "min":  78.70, "std":  79.20, "max":  82.70, "rev_hi":  93.20, "code": "P77G-BB"},
+    "Pouch YB 250gr":          {"rev_lo": 219.00, "tu2": 237.00, "tu1": 246.00, "min": 254.00, "std": 255.00, "max": 257.00, "rev_hi": 263.00, "code": "P250G"},
+    "Pouch BB 270gr":          {"rev_lo": 239.00, "tu2": 257.00, "tu1": 266.00, "min": 274.00, "std": 275.00, "max": 277.00, "rev_hi": 283.00, "code": "P270G"},
+    "Pouch YB 550gr":          {"rev_lo": 500.60, "tu2": 530.80, "tu1": 545.80, "min": 558.00, "std": 561.00, "max": 566.00, "rev_hi": 581.00, "code": "P550G"},
+    "Pouch YB 700gr":          {"rev_lo": 651.00, "tu2": 681.00, "tu1": 696.00, "min": 708.00, "std": 711.00, "max": 716.00, "rev_hi": 731.00, "code": "P700G"},
+    "Pouch BB 725gr":          {"rev_lo": 675.00, "tu2": 705.00, "tu1": 720.00, "min": 732.00, "std": 735.00, "max": 740.00, "rev_hi": 755.00, "code": "P725G"},
+    "Pouch YB 1000gr":         {"rev_lo": 952.50, "tu2": 982.50, "tu1": 997.50, "min":1009.50, "std":1012.50, "max":1017.50, "rev_hi":1032.50, "code": "P1000G"},
+    "Sachet BB 40gr RENCENG (6+1)": {"rev_lo": 373.80, "tu2": 474.60, "tu1": 525.00, "min": 569.40, "std": 575.40, "max": 589.40, "rev_hi": 631.40, "code": "S40G-R(6+1)"},
+    "Sachet YB 20gr RENCENG (6+1)": {"rev_lo": 188.16, "tu2": 238.56, "tu1": 263.76, "min": 284.46, "std": 288.96, "max": 302.96, "rev_hi": 344.96, "code": "S20G-R(6+1)"},
 }
 
 # ── RELASI VARIAN → MESIN ────────────────────────────────────────
 VARIANT_MESIN = {
-    "Sachet YB 12,5gr PCS":    {"Y", "Z"},
-    "Sachet YB 12,5gr RENCENG":{"Y", "Z"},
     "Sachet YB 20gr PCS":      {"O", "P", "W", "X"},
     "Sachet YB 20gr RENCENG":  {"O", "P", "W", "X"},
     "Sachet BB 40gr PCS":      {"Q", "R"},
@@ -133,12 +131,12 @@ VARIANT_MESIN = {
     "Pouch YB 700gr":          {"A", "U", "V"},
     "Pouch BB 725gr":          {"A", "U", "V"},
     "Pouch YB 1000gr":         {"A", "U", "V"},
+    "Sachet BB 40gr RENCENG (6+1)": {"Q", "R"},
+    "Sachet YB 20gr RENCENG (6+1)": {"O", "P", "W", "X"},
 }
 
 # ── RELASI VARIAN → JUMLAH FILLER ───────────────────────────────
 VARIANT_FILLER_MAX = {
-    "Sachet YB 12,5gr PCS":    8,
-    "Sachet YB 12,5gr RENCENG":8,
     "Sachet YB 20gr PCS":      6,
     "Sachet YB 20gr RENCENG":  6,
     "Sachet BB 40gr PCS":      6,
@@ -151,6 +149,8 @@ VARIANT_FILLER_MAX = {
     "Pouch YB 700gr":          2,
     "Pouch BB 725gr":          2,
     "Pouch YB 1000gr":         2,
+    "Sachet BB 40gr RENCENG (6+1)": 6,
+    "Sachet YB 20gr RENCENG (6+1)": 6,
 }
 
 # ── SEMUA MESIN ─────────────────────────────────────────────────
